@@ -132,7 +132,7 @@
         <h1>Number Information</h1>
         <span class="credit">Credit: SHADOW JOKER CTH</span>
 
-        <input type="text" id="phoneInput" placeholder="Enter BD Number (e.g. 017...)" value="">
+        <input type="text" id="phoneInput" placeholder="Enter BD Number (e.g. 017...)">
         <button onclick="lookupNumber()" id="btnSubmit">Scan Number</button>
 
         <img src="https://media.giphy.com/media/QKDpE67Rc7rpjBmQPj/giphy.gif" class="loader-gif" id="loader">
@@ -166,19 +166,18 @@
 
             if (!num) return alert("দয়া করে একটি নাম্বার দিন!");
 
-            // বাংলাদেশি কান্ট্রি কোড হ্যান্ডেলিং এবং নম্বর ফিল্টারিং
-            let countryCode = "bd"; 
-            let cleanNum = num.replace(/\D/g, ''); // স্পেস, প্লাস বা ড্যাশ বাদ দিয়ে শুধু সংখ্যা রাখা
+            // বাংলাদেশী কান্ট্রি কোড ও নম্বর ফিল্টারিং
+            let dialingCode = "880"; 
+            let cleanNum = num.replace(/\D/g, ''); 
 
             if (cleanNum.startsWith('880')) {
-                cleanNum = cleanNum.substring(3); // ৮৮০ বাদ দিয়ে মূল ১০ ডিজিট নেওয়া
+                cleanNum = cleanNum.substring(3);
             } else if (cleanNum.startsWith('0')) {
-                cleanNum = cleanNum.substring(1); // ০ বাদ দিয়ে মূল ১০ ডিজিট নেওয়া
+                cleanNum = cleanNum.substring(1);
             }
 
-            // নম্বরটি সঠিক সাইজের (১০ ডিজিট) কিনা তা চেক করা
             if (cleanNum.length !== 10) {
-                return alert("দয়া করে একটি সঠিক ১১ ডিজিটের বাংলাদেশী নাম্বার দিন! (যেমন: 017XXXXXXXX)");
+                return alert("দয়া করে একটি সঠিক ১১ ডিজিটের বাংলাদেশী নাম্বার দিন!");
             }
 
             loader.style.display = "block";
@@ -186,52 +185,44 @@
             btn.disabled = true;
 
             try {
-                // Vercel Serverless Function-কে কল করা হচ্ছে
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: cleanNum, countryCode: countryCode })
+                    body: JSON.stringify({ phone: cleanNum, dialingCode: dialingCode })
                 });
                 
-                const data = await response.json();
+                const resData = await response.json();
 
-                // বিভিন্ন ফরম্যাটের অবজেক্ট চেক করার অ্যাডভান্সড লজিক
-                let profile = null;
-                if (data && data.data && data.data[0]) {
-                    profile = data.data[0]; 
-                } else if (data && data.name) {
-                    profile = data; 
-                }
-
-                if (profile) {
-                    // নাম সেট করা
-                    document.getElementById('resName').innerText = profile.name || "No Name Found";
+                // নতুন এপিআই-এর JSON ফরম্যাট অনুযায়ী ডাটা রিড করা
+                if (resData && resData.data && resData.error === 0) {
+                    const info = resData.data;
                     
-                    // ফোন নম্বর ফরম্যাট শো করা
-                    document.getElementById('resNum').innerText = (profile.phones && profile.phones[0]?.e164Format) || ("+880" + cleanNum);
+                    // নাম সেট করা
+                    document.getElementById('resName').innerText = info.basicInfo?.name?.fullName || "No Name Found";
+                    
+                    // ফোন নম্বর
+                    document.getElementById('resNum').innerText = info.phoneInfo?.e164Format || ("+880" + cleanNum);
                     
                     // ঠিকানা জেনারেট করা
-                    const city = (profile.addresses && profile.addresses[0]?.city) || "";
-                    const country = (profile.addresses && profile.addresses[0]?.countryCode) || "BD";
+                    const city = info.addressInfo?.city || "";
+                    const country = info.addressInfo?.countryCode || "BD";
                     document.getElementById('resAddr').innerText = city ? `${city}, ${country}` : "Bangladesh";
 
-                    // প্রোফাইল ফটো চেক
-                    if (profile.image) {
-                        resPhoto.src = profile.image;
+                    // প্রোফাইল ফটো সেট করা
+                    if (info.basicInfo?.image) {
+                        resPhoto.src = info.basicInfo.image;
                         resPhoto.style.display = "inline-block";
                     } else {
                         resPhoto.style.display = "none";
                     }
 
-                    // হোয়াটসঅ্যাপ লিঙ্ক জেনারেশন (+880 দিয়ে)
+                    // সোশ্যাল লিঙ্ক জেনারেশন
                     document.getElementById('waLink').href = `https://wa.me/880${cleanNum}`;
                     document.getElementById('tgLink').href = `https://t.me/SHADOW_JOKER_CTH`;
 
                     resultDiv.style.display = "block";
                 } else {
-                    // যদি কোনো ডাটা না থাকে বা মেসেজ এরর থাকে
-                    const msg = data.message || "কোনো তথ্য পাওয়া যায়নি অথবা এপিআই লিমিট শেষ!";
-                    alert(msg);
+                    alert("কোনো তথ্য পাওয়া যায়নি অথবা এপিআই কোটা শেষ!");
                 }
             } catch (err) {
                 alert("সার্ভার কানেকশন এরর!");
