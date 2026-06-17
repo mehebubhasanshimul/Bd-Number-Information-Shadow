@@ -3,32 +3,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { phone, countryCode } = req.body || {};
+  const { phone, dialingCode } = req.body || {};
 
   if (!phone) {
     return res.status(400).json({ error: 'Phone number is required' });
   }
 
-  const searchParams = new URLSearchParams();
-  searchParams.append('phone', phone);
-  searchParams.append('countryCode', countryCode || 'bd');
+  // নতুন API অনুযায়ী ডায়ালিং কোড এবং নম্বর একসাথে জোড়া হচ্ছে (যেমন: 880 + 17XXXXXXXX)
+  const fullNumber = `${dialingCode || '880'}${phone}`;
 
   try {
-    const response = await fetch('https://truecaller-api11.p.rapidapi.com/v2.php', {
-      method: 'POST',
+    const response = await fetch(`https://truecaller-data2.p.rapidapi.com/search/${fullNumber}`, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-        'x-rapidapi-host': 'truecaller-api11.p.rapidapi.com'
-      },
-      body: searchParams.toString()
+        'x-rapidapi-key': process.env.RAPIDAPI_KEY, // Vercel-এর Environment Variable থেকে কী নিবে
+        'x-rapidapi-host': 'truecaller-data2.p.rapidapi.com',
+        'Content-Type': 'application/json'
+      }
     });
 
     const data = await response.json();
-    
-    // এই লাইনটি Vercel Logs-এ এপিআই-এর আসল ডাটা প্রিন্ট করবে
-    console.log("RapidAPI Response Data:", JSON.stringify(data));
-    
     return res.status(200).json(data);
     
   } catch (error) {
