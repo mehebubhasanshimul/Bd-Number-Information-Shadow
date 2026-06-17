@@ -132,7 +132,7 @@
         <h1>Number Information</h1>
         <span class="credit">Credit: SHADOW JOKER CTH</span>
 
-        <input type="text" id="phoneInput" placeholder="Enter Number (e.g. 017...)">
+        <input type="text" id="phoneInput" placeholder="Enter BD Number (e.g. 017...)" value="">
         <button onclick="lookupNumber()" id="btnSubmit">Scan Number</button>
 
         <img src="https://media.giphy.com/media/QKDpE67Rc7rpjBmQPj/giphy.gif" class="loader-gif" id="loader">
@@ -166,16 +166,19 @@
 
             if (!num) return alert("দয়া করে একটি নাম্বার দিন!");
 
-            // কান্ট্রি কোড ও নম্বর আলাদা করার লজিক
-            let countryCode = "in"; // ডিফল্ট ইন্ডিয়া
-            let cleanNum = num.replace(/\D/g, ''); // স্পেস বা অন্য ক্যারেক্টার বাদ দিয়ে শুধু সংখ্যা রাখা
+            // বাংলাদেশি কান্ট্রি কোড হ্যান্ডেলিং এবং নম্বর ফিল্টারিং
+            let countryCode = "bd"; 
+            let cleanNum = num.replace(/\D/g, ''); // স্পেস, প্লাস বা ড্যাশ বাদ দিয়ে শুধু সংখ্যা রাখা
 
             if (cleanNum.startsWith('880')) {
-                countryCode = 'bd';
-                cleanNum = cleanNum.substring(3);
+                cleanNum = cleanNum.substring(3); // ৮৮০ বাদ দিয়ে মূল ১০ ডিজিট নেওয়া
             } else if (cleanNum.startsWith('0')) {
-                countryCode = 'bd'; // বাংলাদেশী নাম্বার ০ দিয়ে শুরু হলে
-                cleanNum = cleanNum.substring(1);
+                cleanNum = cleanNum.substring(1); // ০ বাদ দিয়ে মূল ১০ ডিজিট নেওয়া
+            }
+
+            // নম্বরটি সঠিক সাইজের (১০ ডিজিট) কিনা তা চেক করা
+            if (cleanNum.length !== 10) {
+                return alert("দয়া করে একটি সঠিক ১১ ডিজিটের বাংলাদেশী নাম্বার দিন! (যেমন: 017XXXXXXXX)");
             }
 
             loader.style.display = "block";
@@ -186,28 +189,33 @@
                 // Vercel Serverless Function-কে কল করা হচ্ছে
                 const response = await fetch('/api/search', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        phone: cleanNum,
-                        countryCode: countryCode
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: cleanNum, countryCode: countryCode })
                 });
                 
                 const data = await response.json();
 
-                // Truecaller API রেসপন্স ডাটা প্রসেসিং
+                // বিভিন্ন ফরম্যাটের অবজেক্ট চেক করার অ্যাডভান্সড লজিক
+                let profile = null;
                 if (data && data.data && data.data[0]) {
-                    const profile = data.data[0];
-                    
-                    document.getElementById('resName').innerText = profile.name || "N/A";
-                    document.getElementById('resNum').innerText = profile.phones?.[0]?.e164Format || num;
-                    
-                    const city = profile.addresses?.[0]?.city || "";
-                    const country = profile.addresses?.[0]?.countryCode || "";
-                    document.getElementById('resAddr').innerText = city && country ? `${city}, ${country}` : "No Address Found";
+                    profile = data.data[0]; 
+                } else if (data && data.name) {
+                    profile = data; 
+                }
 
+                if (profile) {
+                    // নাম সেট করা
+                    document.getElementById('resName').innerText = profile.name || "No Name Found";
+                    
+                    // ফোন নম্বর ফরম্যাট শো করা
+                    document.getElementById('resNum').innerText = (profile.phones && profile.phones[0]?.e164Format) || ("+880" + cleanNum);
+                    
+                    // ঠিকানা জেনারেট করা
+                    const city = (profile.addresses && profile.addresses[0]?.city) || "";
+                    const country = (profile.addresses && profile.addresses[0]?.countryCode) || "BD";
+                    document.getElementById('resAddr').innerText = city ? `${city}, ${country}` : "Bangladesh";
+
+                    // প্রোফাইল ফটো চেক
                     if (profile.image) {
                         resPhoto.src = profile.image;
                         resPhoto.style.display = "inline-block";
@@ -215,13 +223,15 @@
                         resPhoto.style.display = "none";
                     }
 
-                    // সোশ্যাল লিঙ্ক জেনারেশন
-                    document.getElementById('waLink').href = `https://wa.me/${profile.phones?.[0]?.e164Format || cleanNum}`;
+                    // হোয়াটসঅ্যাপ লিঙ্ক জেনারেশন (+880 দিয়ে)
+                    document.getElementById('waLink').href = `https://wa.me/880${cleanNum}`;
                     document.getElementById('tgLink').href = `https://t.me/SHADOW_JOKER_CTH`;
 
                     resultDiv.style.display = "block";
                 } else {
-                    alert("কোনো তথ্য পাওয়া যায়নি!");
+                    // যদি কোনো ডাটা না থাকে বা মেসেজ এরর থাকে
+                    const msg = data.message || "কোনো তথ্য পাওয়া যায়নি অথবা এপিআই লিমিট শেষ!";
+                    alert(msg);
                 }
             } catch (err) {
                 alert("সার্ভার কানেকশন এরর!");
